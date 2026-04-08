@@ -323,7 +323,7 @@ class RobotLeadApp:
             fecha_code  = fecha_match.group(1) if fecha_match else ts[:4]
             tipo_str    = self._detect_tipo()
             csv_path    = os.path.join(folder, f"Lote_Leads_{tipo_str}_{fecha_code}.csv")
-            df_si.to_csv(csv_path, index=False, sep=",", encoding="utf-8-sig")
+            df_si.to_csv(csv_path, index=False, sep=",", encoding="latin-1", errors="replace")
             self._log(f"✓  CSV generado ({len(df_si)} filas): {os.path.basename(csv_path)}")
 
             # ── Acumular filas "si" con metadata ─────────────────

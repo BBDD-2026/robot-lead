@@ -199,7 +199,7 @@ def df_to_excel_bytes(df: pd.DataFrame) -> bytes:
 
 
 def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
-    return df.to_csv(index=False, sep=",", encoding="utf-8-sig").encode("utf-8-sig")
+    return df.to_csv(index=False, sep=",").encode("latin-1", errors="replace")
 
 
 def build_csv_si(df: pd.DataFrame) -> pd.DataFrame:
