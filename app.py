@@ -353,6 +353,24 @@ with tab_acum:
     COLS_VISTA = ["DB_ID", "record_id", "customer_firstname", "customer_lastname",
                   "PhoneNumber", "City", "Province", "_tipo", "_periodo"]
 
+    # ── Botón resetear ────────────────────────────────────────────
+    col_rst, _ = st.columns([1, 4])
+    with col_rst:
+        if st.button("🗑  Dejar en cero", use_container_width=True):
+            for path in [LOTES_FILE, ACUM_PORTA, ACUM_BAF]:
+                if os.path.exists(path):
+                    os.remove(path)
+            st.session_state.acum  = {"Porta": [], "Baf": []}
+            st.session_state.lotes = []
+            # Limpiar claves de archivos guardados
+            for k in list(st.session_state.keys()):
+                if k.startswith("guardado_"):
+                    del st.session_state[k]
+            st.success("Acumulado reiniciado correctamente.")
+            st.rerun()
+
+    st.markdown("---")
+
     for tipo in ("Porta", "Baf"):
         lst = st.session_state.acum.get(tipo, [])
         df_all = pd.concat(lst, ignore_index=True) if lst else pd.DataFrame()
