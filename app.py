@@ -290,10 +290,16 @@ with tab_proc:
                     use_container_width=True,
                     key=f"dl_excel_{tipo}"
                 )
+                # Extraer fecha del nombre del archivo (ej: Porta_0804.xlsx → 0804)
+                import re as _re
+                fecha_match = _re.search(r'_(\d{4})', uploaded.name)
+                fecha_code  = fecha_match.group(1) if fecha_match else datetime.now().strftime("%d%m")
+                csv_name    = f"Lote_Leads_{tipo}_{fecha_code}.csv"
+
                 st.download_button(
                     label=f"📥 CSV subir ({len(df_csv)} filas 'si')",
                     data=df_to_csv_bytes(df_csv),
-                    file_name=f"{base}_subir_{ts}.csv",
+                    file_name=csv_name,
                     mime="text/csv",
                     use_container_width=True,
                     key=f"dl_csv_{tipo}"

@@ -319,7 +319,10 @@ class RobotLeadApp:
                 end_col = df_si.columns.get_loc("DB_ID") + 1
                 df_si = df_si.iloc[:, :end_col]
 
-            csv_path = f"{base}_subir_{ts}.csv"
+            fecha_match = re.search(r'_(\d{4})', orig_name)
+            fecha_code  = fecha_match.group(1) if fecha_match else ts[:4]
+            tipo_str    = self._detect_tipo()
+            csv_path    = os.path.join(folder, f"Lote_Leads_{tipo_str}_{fecha_code}.csv")
             df_si.to_csv(csv_path, index=False, sep=",", encoding="utf-8-sig")
             self._log(f"✓  CSV generado ({len(df_si)} filas): {os.path.basename(csv_path)}")
 
