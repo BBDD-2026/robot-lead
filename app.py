@@ -206,9 +206,14 @@ def build_csv_si(df: pd.DataFrame) -> pd.DataFrame:
     df_si = df[df["Subir"] == "si"].copy().reset_index(drop=True)
     df_si["record_id"] = range(1, len(df_si) + 1)
     df_si["chain_id"]  = df_si["record_id"]
+    # Eliminar primeras 7 columnas (empieza en record_id)
     if "record_id" in df_si.columns:
         start = df_si.columns.get_loc("record_id")
         df_si = df_si.iloc[:, start:]
+    # Eliminar columnas posteriores a DB_ID
+    if "DB_ID" in df_si.columns:
+        end = df_si.columns.get_loc("DB_ID") + 1
+        df_si = df_si.iloc[:, :end]
     return df_si
 
 
