@@ -118,11 +118,12 @@ def decode_db_id(value) -> tuple:
     if not value or not isinstance(value, str):
         return ("?", "?")
     v = value.strip()
-    if len(v) < 5:
+    # Formato: L + MM + YY + P/B  (ej: L0326P = Lote Marzo 2026 Porta)
+    if len(v) < 6 or v[0].upper() != "L":
         return ("?", v)
-    mm   = v[:2]
-    yy   = v[2:4]
-    tipo = v[4].upper()
+    mm   = v[1:3]
+    yy   = v[3:5]
+    tipo = v[5].upper()
     mes  = MESES.get(mm, mm)
     year = f"20{yy}"
     nombre = "Porta" if tipo == "P" else "Baf" if tipo == "B" else tipo
