@@ -310,6 +310,7 @@ with tab_proc:
                 if key_guard not in st.session_state:
                     st.session_state[key_guard] = True
                     df_acum = df_p[df_p["Subir"] == "si"].copy()
+                    df_acum["_fecha_proceso"] = datetime.now().strftime("%d/%m/%Y")
                     if "DB_ID" in df_acum.columns:
                         decoded = df_acum["DB_ID"].apply(
                             lambda x: decode_db_id(str(x)) if pd.notna(x) else ("?", "?")
@@ -488,3 +489,30 @@ with tab_muestreo:
         }])
         df_tabla = pd.concat([df_lotes, totales], ignore_index=True)
         st.dataframe(df_tabla, use_container_width=True, hide_index=True)
+
+        # ── Desglose por fecha y período (DB_ID) ─────────────────
+        st.markdown("---")
+        st.markdown("<div class='section-title'>Registros 'si' por fecha y período (DB_ID)</div>", unsafe_allow_html=True)
+
+        all_frames = []
+        for tipo_acum in ("Porta", "Baf"):
+            for df_chunk in st.session_state.acum.get(tipo_acum, []):
+                if "_periodo" in df_chunk.columns and "_fecha_proceso" in df_chunk.columns:
+                    all_frames.append(df_chunk[["_fecha_proceso", "_tipo", "_periodo"]])
+
+        if all_frames:
+            df_dbid = pd.concat(all_frames, ignore_index=True)
+            grp = (
+                df_dbid
+                .groupby(["_fecha_proceso", "_tipo", "_periodo"])
+                .size()
+                .reset_index(name="Registros")
+            )
+            # Formatear fecha como DD-MM
+            grp["Fecha"] = pd.to_datetime(grp["_fecha_proceso"], format="%d/%m/%Y", errors="coerce").dt.strftime("%d-%m")
+            grp["Fecha"] = grp["Fecha"].fillna(grp["_fecha_proceso"])
+            grp = grp.rename(columns={"_tipo": "Tipo", "_periodo": "Período"})
+            grp = grp[["Fecha", "Tipo", "Período", "Registros"]].sort_values(["Fecha", "Tipo", "Período"])
+            st.dataframe(grp, use_container_width=False, hide_index=True)
+        else:
+            st.caption("Sin datos de DB_ID para mostrar. Procesá archivos nuevos para ver el desglose.")
