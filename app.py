@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import plotly.graph_objects as go
 import re
 import io
 import json
@@ -8,10 +7,10 @@ import os
 from datetime import datetime
 
 # ── Rutas de persistencia ─────────────────────────────────────
-DATA_DIR       = os.path.join(os.path.dirname(__file__), "data")
-LOTES_FILE     = os.path.join(DATA_DIR, "lotes.json")
-ACUM_PORTA     = os.path.join(DATA_DIR, "acum_Porta.csv")
-ACUM_BAF       = os.path.join(DATA_DIR, "acum_Baf.csv")
+DATA_DIR   = os.path.join(os.path.dirname(__file__), "data")
+LOTES_FILE = os.path.join(DATA_DIR, "lotes.json")
+ACUM_PORTA = os.path.join(DATA_DIR, "acum_Porta.csv")
+ACUM_BAF   = os.path.join(DATA_DIR, "acum_Baf.csv")
 os.makedirs(DATA_DIR, exist_ok=True)
 
 
@@ -43,6 +42,7 @@ def _save_acum(df_new: pd.DataFrame, path: str):
     else:
         df_all = df_new
     df_all.to_csv(path, index=False, encoding="utf-8-sig")
+
 
 # ── Config ────────────────────────────────────────────────────
 st.set_page_config(
@@ -129,15 +129,6 @@ def decode_db_id(value) -> tuple:
     return (nombre, f"{mes} {year}")
 
 
-def detect_tipo(filename: str) -> str:
-    name = filename.lower()
-    if "porta" in name:
-        return "Porta"
-    if "baf" in name:
-        return "Baf"
-    return "Otro"
-
-
 def procesar(df: pd.DataFrame) -> dict:
     df = df.copy()
 
@@ -206,11 +197,9 @@ def build_csv_si(df: pd.DataFrame) -> pd.DataFrame:
     df_si = df[df["Subir"] == "si"].copy().reset_index(drop=True)
     df_si["record_id"] = range(1, len(df_si) + 1)
     df_si["chain_id"]  = df_si["record_id"]
-    # Eliminar primeras 7 columnas (empieza en record_id)
     if "record_id" in df_si.columns:
         start = df_si.columns.get_loc("record_id")
         df_si = df_si.iloc[:, start:]
-    # Eliminar columnas posteriores a DB_ID
     if "DB_ID" in df_si.columns:
         end = df_si.columns.get_loc("DB_ID") + 1
         df_si = df_si.iloc[:, :end]
@@ -225,13 +214,42 @@ def metric_card(label, value, color="#cdd6f4"):
     </div>"""
 
 
+def build_period_table(frames_porta: list, frames_baf: list) -> pd.DataFrame | None:
+    """Construye tabla pivoteada: Período | Porta | Baf | Total."""
+    rows = []
+    for df_chunk in frames_porta:
+        if "_periodo" in df_chunk.columns:
+            tmp = df_chunk[["_periodo"]].copy()
+            tmp["_tipo"] = "Porta"
+            rows.append(tmp)
+    for df_chunk in frames_baf:
+        if "_periodo" in df_chunk.columns:
+            tmp = df_chunk[["_periodo"]].copy()
+            tmp["_tipo"] = "Baf"
+            rows.append(tmp)
+
+    if not rows:
+        return None
+
+    df_all = pd.concat(rows, ignore_index=True)
+    grp = df_all.groupby(["_periodo", "_tipo"]).size().reset_index(name="n")
+    pivot = grp.pivot_table(index="_periodo", columns="_tipo", values="n", aggfunc="sum", fill_value=0)
+    pivot.columns.name = None
+    pivot = pivot.reset_index().rename(columns={"_periodo": "Período"})
+    for col in ("Porta", "Baf"):
+        if col not in pivot.columns:
+            pivot[col] = 0
+    pivot["Total"] = pivot["Porta"] + pivot["Baf"]
+    return pivot[["Período", "Porta", "Baf", "Total"]]
+
+
 # ── Header ────────────────────────────────────────────────────
 st.markdown("<h1 style='text-align:center;color:#89b4fa;margin-bottom:0'>ROBOT LEAD</h1>", unsafe_allow_html=True)
 st.markdown("<p style='text-align:center;color:#6c7086;margin-top:0'>Procesador de Archivos Excel · Porta / Baf</p>", unsafe_allow_html=True)
 st.markdown("---")
 
 # ── Tabs principales ──────────────────────────────────────────
-tab_proc, tab_acum, tab_muestreo = st.tabs(["⚙  Procesar", "📋  Acumulado", "📊  Muestreo del Dia"])
+tab_proc, tab_muestreo, tab_acum = st.tabs(["⚙  Procesar", "📊  Muestreo del Dia", "📋  Acumulado"])
 
 
 # ══════════════════════════════════════════════════════════════
@@ -256,8 +274,8 @@ with tab_proc:
             )
             st.markdown("<br>", unsafe_allow_html=True)
 
-            res_key  = f"res_{tipo}"
-            nom_key  = f"nom_{tipo}"
+            res_key = f"res_{tipo}"
+            nom_key = f"nom_{tipo}"
 
             if st.button(f"⚙  Procesar {tipo}", key=f"btn_{tipo}", use_container_width=True):
                 with st.spinner("Procesando..."):
@@ -270,10 +288,10 @@ with tab_proc:
 
                 st.markdown("<div class='section-title'>Resultado</div>", unsafe_allow_html=True)
                 r1, r2 = st.columns(2)
-                r1.markdown(metric_card("si",      res["si"],        "#a6e3a1"), unsafe_allow_html=True)
-                r2.markdown(metric_card("dupl",    res["dupl"],      "#f9e2af"), unsafe_allow_html=True)
+                r1.markdown(metric_card("si",        res["si"],        "#a6e3a1"), unsafe_allow_html=True)
+                r2.markdown(metric_card("dupl",      res["dupl"],      "#f9e2af"), unsafe_allow_html=True)
                 r3, r4 = st.columns(2)
-                r3.markdown(metric_card("Invalid", res["invalid"],   "#f38ba8"), unsafe_allow_html=True)
+                r3.markdown(metric_card("Invalid",   res["invalid"],   "#f38ba8"), unsafe_allow_html=True)
                 r4.markdown(metric_card("Sin Datos", res["sin_datos"], "#f38ba8" if res["sin_datos"] else "#a6e3a1"), unsafe_allow_html=True)
 
                 st.markdown("<br>", unsafe_allow_html=True)
@@ -290,7 +308,7 @@ with tab_proc:
                     use_container_width=True,
                     key=f"dl_excel_{tipo}"
                 )
-                # Extraer fecha del nombre del archivo (ej: Porta_0804.xlsx → 0804)
+
                 import re as _re
                 fecha_match = _re.search(r'_(\d{4})', uploaded.name)
                 fecha_code  = fecha_match.group(1) if fecha_match else datetime.now().strftime("%d%m")
@@ -335,7 +353,6 @@ with tab_proc:
                     }
                     st.session_state.lotes.append(lote)
 
-                    # Persistir en disco
                     _save_lotes(st.session_state.lotes)
                     acum_path = ACUM_PORTA if tipo == "Porta" else ACUM_BAF
                     _save_acum(df_acum, acum_path)
@@ -348,13 +365,57 @@ with tab_proc:
 
 
 # ══════════════════════════════════════════════════════════════
-# TAB 2 — ACUMULADO
+# TAB 2 — MUESTREO DEL DIA
+# ══════════════════════════════════════════════════════════════
+with tab_muestreo:
+    hoy   = datetime.now().strftime("%d/%m/%Y")
+    lotes = st.session_state.lotes
+    lotes_hoy = [l for l in lotes if l.get("fecha") == hoy]
+
+    st.markdown(f"<h4 style='color:#cdd6f4'>Procesamiento del dia — {hoy}</h4>", unsafe_allow_html=True)
+
+    if not lotes_hoy:
+        st.info("No se procesaron archivos hoy.")
+    else:
+        porta_si = sum(l["si"] for l in lotes_hoy if l["tipo"] == "Porta")
+        baf_si   = sum(l["si"] for l in lotes_hoy if l["tipo"] == "Baf")
+        total_si = porta_si + baf_si
+
+        mc1, mc2, mc3 = st.columns(3)
+        mc1.markdown(metric_card("TOTAL", total_si, "#cdd6f4"), unsafe_allow_html=True)
+        mc2.markdown(metric_card("PORTA", porta_si, "#89b4fa"), unsafe_allow_html=True)
+        mc3.markdown(metric_card("BAF",   baf_si,   "#a6e3a1"), unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        # Período por DB_ID — solo registros de hoy
+        frames_porta_hoy, frames_baf_hoy = [], []
+        for tipo, frames_list in (("Porta", frames_porta_hoy), ("Baf", frames_baf_hoy)):
+            for df_chunk in st.session_state.acum.get(tipo, []):
+                if "_periodo" in df_chunk.columns and "_fecha_proceso" in df_chunk.columns:
+                    df_hoy = df_chunk[df_chunk["_fecha_proceso"] == hoy]
+                    if not df_hoy.empty:
+                        frames_list.append(df_hoy)
+
+        tabla_hoy = build_period_table(frames_porta_hoy, frames_baf_hoy)
+
+        if tabla_hoy is not None:
+            st.markdown("<div class='section-title'>Registros 'si' por período (DB_ID)</div>", unsafe_allow_html=True)
+            st.dataframe(tabla_hoy, use_container_width=False, hide_index=True)
+        else:
+            st.caption("Sin desglose por período disponible para hoy.")
+
+        st.markdown("---")
+        st.markdown("<div class='section-title'>Archivos procesados hoy</div>", unsafe_allow_html=True)
+        df_lotes_hoy = pd.DataFrame(lotes_hoy)[["tipo", "archivo", "hora", "si", "dupl", "invalid", "sin_datos"]]
+        df_lotes_hoy.columns = ["Tipo", "Archivo", "Hora", "si", "dupl", "Invalid", "Sin Datos"]
+        st.dataframe(df_lotes_hoy, use_container_width=True, hide_index=True)
+
+
+# ══════════════════════════════════════════════════════════════
+# TAB 3 — ACUMULADO
 # ══════════════════════════════════════════════════════════════
 with tab_acum:
-    COLS_VISTA = ["DB_ID", "record_id", "customer_firstname", "customer_lastname",
-                  "PhoneNumber", "City", "Province", "_tipo", "_periodo"]
-
-    # ── Botón resetear ────────────────────────────────────────────
     col_rst, _ = st.columns([1, 4])
     with col_rst:
         if st.button("🗑  Dejar en cero", use_container_width=True):
@@ -363,7 +424,6 @@ with tab_acum:
                     os.remove(path)
             st.session_state.acum  = {"Porta": [], "Baf": []}
             st.session_state.lotes = []
-            # Limpiar claves de archivos guardados
             for k in list(st.session_state.keys()):
                 if k.startswith("guardado_"):
                     del st.session_state[k]
@@ -372,147 +432,29 @@ with tab_acum:
 
     st.markdown("---")
 
-    for tipo in ("Porta", "Baf"):
+    frames_porta = st.session_state.acum.get("Porta", [])
+    frames_baf   = st.session_state.acum.get("Baf",   [])
+    tabla_acum   = build_period_table(frames_porta, frames_baf)
+
+    if tabla_acum is not None:
+        st.markdown("<div class='section-title'>Total acumulado por período (DB_ID)</div>", unsafe_allow_html=True)
+        st.dataframe(tabla_acum, use_container_width=False, hide_index=True)
+        st.markdown("<br>", unsafe_allow_html=True)
+    else:
+        st.info("Sin datos acumulados.")
+
+    # Descargas por tipo
+    dl1, dl2 = st.columns(2)
+    for col_dl, tipo in ((dl1, "Porta"), (dl2, "Baf")):
         lst = st.session_state.acum.get(tipo, [])
-        df_all = pd.concat(lst, ignore_index=True) if lst else pd.DataFrame()
-
-        color = "#89b4fa" if tipo == "Porta" else "#a6e3a1"
-        st.markdown(f"<h4 style='color:{color}'>{tipo} — {len(df_all)} filas</h4>", unsafe_allow_html=True)
-
-        if not df_all.empty:
-            if "_periodo" in df_all.columns:
-                resumen = df_all.groupby("_periodo").size().reset_index(name="Filas")
-                st.dataframe(resumen, use_container_width=False, hide_index=True)
-
-            cols_disp = [c for c in COLS_VISTA if c in df_all.columns]
-            st.dataframe(df_all[cols_disp] if cols_disp else df_all,
-                         use_container_width=True, hide_index=True, height=220)
-
+        if lst:
+            df_t = pd.concat(lst, ignore_index=True)
             ts_dl = datetime.now().strftime("%d%m_%H%M")
-            st.download_button(
-                label=f"📥  Descargar acumulado {tipo}",
-                data=df_to_csv_bytes(df_all),
+            col_dl.download_button(
+                label=f"📥 Descargar acumulado {tipo}",
+                data=df_to_csv_bytes(df_t),
                 file_name=f"acumulado_{tipo}_{ts_dl}.csv",
                 mime="text/csv",
+                use_container_width=True,
                 key=f"dl_acum_{tipo}"
             )
-        else:
-            st.caption(f"Sin datos acumulados para {tipo}.")
-
-        st.markdown("---")
-
-
-# ══════════════════════════════════════════════════════════════
-# TAB 3 — MUESTREO DEL DIA
-# ══════════════════════════════════════════════════════════════
-with tab_muestreo:
-    lotes = st.session_state.lotes
-    hoy   = datetime.now().strftime("%d/%m/%Y")
-
-    st.markdown(f"<h4 style='color:#cdd6f4'>Procesamiento del dia — {hoy}</h4>", unsafe_allow_html=True)
-
-    if not lotes:
-        st.info("Procesá al menos un archivo para ver el muestreo.")
-    else:
-        porta_si = sum(l["si"] for l in lotes if l["tipo"] == "Porta")
-        baf_si   = sum(l["si"] for l in lotes if l["tipo"] == "Baf")
-        total_si = porta_si + baf_si
-
-        # Tarjetas
-        mc1, mc2, mc3, mc4 = st.columns(4)
-        mc1.markdown(metric_card("TOTAL PROCESADO", total_si,    "#cdd6f4"), unsafe_allow_html=True)
-        mc2.markdown(metric_card("PORTA",           porta_si,    "#89b4fa"), unsafe_allow_html=True)
-        mc3.markdown(metric_card("BAF",             baf_si,      "#a6e3a1"), unsafe_allow_html=True)
-        mc4.markdown(metric_card("LOTES",           len(lotes),  "#f9e2af"), unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        gc1, gc2 = st.columns([2, 1])
-
-        # Gráfico de barras por lote
-        with gc1:
-            etiquetas = [f"{l['tipo']} {l['hora']}" for l in lotes]
-            valores   = [l["si"] for l in lotes]
-            colores   = ["#89b4fa" if l["tipo"] == "Porta" else "#a6e3a1" for l in lotes]
-
-            fig = go.Figure(go.Bar(
-                x=etiquetas, y=valores,
-                marker_color=colores,
-                text=valores, textposition="outside",
-                textfont=dict(color="#cdd6f4", size=12)
-            ))
-            fig.update_layout(
-                title=dict(text="Registros 'si' por lote", font=dict(color="#cdd6f4", size=13)),
-                plot_bgcolor="#2a2a3e", paper_bgcolor="#1e1e2e",
-                font=dict(color="#cdd6f4"),
-                xaxis=dict(gridcolor="#313244"),
-                yaxis=dict(gridcolor="#313244"),
-                margin=dict(t=40, b=20, l=20, r=20),
-                height=300
-            )
-            st.plotly_chart(fig, use_container_width=True)
-
-        # Torta Porta vs Baf
-        with gc2:
-            fig2 = go.Figure(go.Pie(
-                labels=["Porta", "Baf"],
-                values=[porta_si, baf_si],
-                marker_colors=["#89b4fa", "#a6e3a1"],
-                hole=0.4,
-                textinfo="label+percent",
-                textfont=dict(color="#1e1e2e", size=12)
-            ))
-            fig2.update_layout(
-                paper_bgcolor="#1e1e2e",
-                font=dict(color="#cdd6f4"),
-                margin=dict(t=20, b=20, l=20, r=20),
-                height=300,
-                showlegend=False
-            )
-            st.plotly_chart(fig2, use_container_width=True)
-
-        # Tabla de lotes
-        st.markdown("<div class='section-title'>Detalle de lotes</div>", unsafe_allow_html=True)
-        df_lotes = pd.DataFrame(lotes)
-        # compatibilidad con lotes viejos (sin campo fecha)
-        if "fecha" not in df_lotes.columns:
-            df_lotes["fecha"] = hoy
-        df_lotes = df_lotes[["fecha", "tipo", "archivo", "hora", "si", "dupl", "invalid", "sin_datos"]]
-        df_lotes.columns = ["Fecha", "Tipo", "Archivo", "Hora", "si", "dupl", "Invalid", "Sin Datos"]
-
-        totales = pd.DataFrame([{
-            "Tipo": "TOTAL", "Archivo": "", "Hora": "",
-            "si":        df_lotes["si"].sum(),
-            "dupl":      df_lotes["dupl"].sum(),
-            "Invalid":   df_lotes["Invalid"].sum(),
-            "Sin Datos": df_lotes["Sin Datos"].sum(),
-        }])
-        df_tabla = pd.concat([df_lotes, totales], ignore_index=True)
-        st.dataframe(df_tabla, use_container_width=True, hide_index=True)
-
-        # ── Desglose por fecha y período (DB_ID) ─────────────────
-        st.markdown("---")
-        st.markdown("<div class='section-title'>Registros 'si' por fecha y período (DB_ID)</div>", unsafe_allow_html=True)
-
-        all_frames = []
-        for tipo_acum in ("Porta", "Baf"):
-            for df_chunk in st.session_state.acum.get(tipo_acum, []):
-                if "_periodo" in df_chunk.columns and "_fecha_proceso" in df_chunk.columns:
-                    all_frames.append(df_chunk[["_fecha_proceso", "_tipo", "_periodo"]])
-
-        if all_frames:
-            df_dbid = pd.concat(all_frames, ignore_index=True)
-            grp = (
-                df_dbid
-                .groupby(["_fecha_proceso", "_tipo", "_periodo"])
-                .size()
-                .reset_index(name="Registros")
-            )
-            # Formatear fecha como DD-MM
-            grp["Fecha"] = pd.to_datetime(grp["_fecha_proceso"], format="%d/%m/%Y", errors="coerce").dt.strftime("%d-%m")
-            grp["Fecha"] = grp["Fecha"].fillna(grp["_fecha_proceso"])
-            grp = grp.rename(columns={"_tipo": "Tipo", "_periodo": "Período"})
-            grp = grp[["Fecha", "Tipo", "Período", "Registros"]].sort_values(["Fecha", "Tipo", "Período"])
-            st.dataframe(grp, use_container_width=False, hide_index=True)
-        else:
-            st.caption("Sin datos de DB_ID para mostrar. Procesá archivos nuevos para ver el desglose.")
