@@ -313,7 +313,7 @@ with tab_proc:
                 import re as _re
                 fecha_match = _re.search(r'_(\d{4})', uploaded.name)
                 fecha_code  = fecha_match.group(1) if fecha_match else datetime.now().strftime("%d%m")
-                csv_name    = f"Lote_Leads_{tipo}_{fecha_code}.csv"
+                csv_name    = f"Lote_Fija_{fecha_code}.csv" if tipo == "Baf" else f"Lote_Leads_{tipo}_{fecha_code}.csv"
 
                 st.download_button(
                     label=f"📥 CSV subir ({len(df_csv)} filas 'si')",
