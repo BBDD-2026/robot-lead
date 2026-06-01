@@ -253,12 +253,22 @@ def build_csv_si(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def build_download_acum(df: pd.DataFrame) -> pd.DataFrame:
-    """Elimina columnas de metadata y regenera record_id correlativo para descarga."""
+    """Filtra filas 'si', regenera record_id correlativo y extrae columnas record_id→DB_ID."""
     meta = {"id", "_fecha_proceso", "_tipo", "_periodo", "_mes", "_anio", "_archivo_hash"}
+    if "Subir" in df.columns:
+        df = df[df["Subir"] == "si"].copy().reset_index(drop=True)
+    else:
+        df = df.copy().reset_index(drop=True)
     data_cols = [c for c in df.columns if c not in meta]
-    out = df[data_cols].copy().reset_index(drop=True)
-    out["record_id"] = range(1, len(out) + 1)
-    out["chain_id"]  = out["record_id"]
+    out = df[data_cols]
+    if "record_id" in out.columns and "DB_ID" in out.columns:
+        out = out.copy()
+        out["record_id"] = range(1, len(out) + 1)
+        if "chain_id" in out.columns:
+            out["chain_id"] = out["record_id"]
+        start = out.columns.get_loc("record_id")
+        end   = out.columns.get_loc("DB_ID") + 1
+        out   = out.iloc[:, start:end]
     return out
 
 
@@ -271,9 +281,11 @@ def metric_card(label, value, color="#cdd6f4"):
 
 
 def build_period_table(df: pd.DataFrame) -> pd.DataFrame | None:
-    """Tabla pivote Período | Porta | Baf | Total."""
+    """Tabla pivote Período | Porta | Baf | Total (solo filas 'si')."""
     if df is None or "_periodo" not in df.columns or "_tipo" not in df.columns:
         return None
+    if "Subir" in df.columns:
+        df = df[df["Subir"] == "si"]
     grp   = df.groupby(["_periodo", "_tipo"]).size().reset_index(name="n")
     pivot = grp.pivot_table(index="_periodo", columns="_tipo", values="n", aggfunc="sum", fill_value=0)
     pivot.columns.name = None
@@ -368,16 +380,16 @@ with tab_proc:
                         st.warning("⚠ Este archivo ya estaba acumulado. No se duplicó.")
                     else:
                         now = datetime.now()
-                        df_acum = build_csv_si(df_p).copy()
+                        df_acum = df_p.copy()  # todas las filas (si, dupl, Invalid)
                         df_acum["_fecha_proceso"] = now.strftime("%d/%m/%Y")
                         df_acum["_mes"]  = now.month
                         df_acum["_anio"] = now.year
                         if "DB_ID" in df_p.columns:
-                            decoded = df_p[df_p["Subir"] == "si"]["DB_ID"].apply(
+                            decoded = df_p["DB_ID"].apply(
                                 lambda x: decode_db_id(str(x)) if pd.notna(x) else ("?", "?")
                             )
-                            df_acum["_tipo"]    = decoded.apply(lambda t: t[0]).values
-                            df_acum["_periodo"] = decoded.apply(lambda t: t[1]).values
+                            df_acum["_tipo"]    = decoded.apply(lambda t: t[0] if t[0] != "?" else tipo)
+                            df_acum["_periodo"] = decoded.apply(lambda t: t[1])
                         else:
                             df_acum["_tipo"]    = tipo
                             df_acum["_periodo"] = "?"
