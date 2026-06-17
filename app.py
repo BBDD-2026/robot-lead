@@ -540,15 +540,23 @@ with tab_extractor:
         for f in uploaded_ext:
             try:
                 if f.name.lower().endswith(".csv"):
-                    df_raw = pd.read_csv(f, encoding="latin-1", sep=None, engine="python")
+                    sheets = {"CSV": pd.read_csv(f, encoding="latin-1", sep=None, engine="python")}
                 else:
-                    df_raw = pd.read_excel(f)
-                cols_presentes = [c for c in EXTRACT_COLS if c in df_raw.columns]
-                cols_faltantes = [c for c in EXTRACT_COLS if c not in df_raw.columns]
-                if cols_faltantes:
-                    errores.append(f"**{f.name}** — columnas no encontradas: {', '.join(cols_faltantes)}")
-                if cols_presentes:
-                    frames.append(df_raw[cols_presentes].copy())
+                    sheets = pd.read_excel(f, sheet_name=None)
+
+                for sheet_name, df_raw in sheets.items():
+                    if "Subir" not in df_raw.columns:
+                        continue
+                    df_si = df_raw[df_raw["Subir"].astype(str).str.strip().str.lower() == "si"]
+                    if df_si.empty:
+                        continue
+                    cols_presentes = [c for c in EXTRACT_COLS if c in df_si.columns]
+                    cols_faltantes = [c for c in EXTRACT_COLS if c not in df_si.columns]
+                    if cols_faltantes:
+                        label = f"{f.name} [{sheet_name}]" if sheet_name != "CSV" else f.name
+                        errores.append(f"**{label}** — columnas no encontradas: {', '.join(cols_faltantes)}")
+                    if cols_presentes:
+                        frames.append(df_si[cols_presentes].copy())
             except Exception as e:
                 errores.append(f"**{f.name}** — error al leer: {e}")
 
