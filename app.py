@@ -527,8 +527,8 @@ with tab_extractor:
     )
 
     uploaded_ext = st.file_uploader(
-        "Archivos Excel",
-        type=["xlsx", "xls"],
+        "Archivos Excel o CSV",
+        type=["xlsx", "xls", "csv"],
         accept_multiple_files=True,
         key="up_extractor",
         label_visibility="collapsed"
@@ -539,7 +539,10 @@ with tab_extractor:
 
         for f in uploaded_ext:
             try:
-                df_raw = pd.read_excel(f)
+                if f.name.lower().endswith(".csv"):
+                    df_raw = pd.read_csv(f, encoding="latin-1", sep=None, engine="python")
+                else:
+                    df_raw = pd.read_excel(f)
                 cols_presentes = [c for c in EXTRACT_COLS if c in df_raw.columns]
                 cols_faltantes = [c for c in EXTRACT_COLS if c not in df_raw.columns]
                 if cols_faltantes:
