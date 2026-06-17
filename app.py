@@ -302,7 +302,7 @@ st.markdown("<h1 style='text-align:center;color:#89b4fa;margin-bottom:0'>ROBOT L
 st.markdown("<p style='text-align:center;color:#6c7086;margin-top:0'>Procesador de Archivos Excel · Porta / Baf</p>", unsafe_allow_html=True)
 st.markdown("---")
 
-tab_proc, tab_muestreo, tab_acum = st.tabs(["⚙  Procesar", "📊  Muestreo del Dia", "📋  Acumulado"])
+tab_proc, tab_muestreo, tab_acum, tab_extractor = st.tabs(["⚙  Procesar", "📊  Muestreo del Dia", "📋  Acumulado", "🔍  Extractor"])
 
 
 # ══════════════════════════════════════════════════════════════
@@ -510,3 +510,69 @@ with tab_acum:
                     use_container_width=True,
                     key=f"dl_acum_{tipo_dl}"
                 )
+
+
+# ══════════════════════════════════════════════════════════════
+# TAB 4 — EXTRACTOR
+# ══════════════════════════════════════════════════════════════
+EXTRACT_COLS = ["idinterno_gestor", "tipo_lead", "contact_info"]
+
+with tab_extractor:
+    st.markdown("<h4 style='color:#cdd6f4'>Extractor de columnas</h4>", unsafe_allow_html=True)
+    st.markdown(
+        "<p style='color:#6c7086;font-size:13px'>Sube uno o varios archivos Excel. "
+        "Se extraen las columnas <code>idinterno_gestor</code>, <code>tipo_lead</code> y "
+        "<code>contact_info</code> de todos los archivos y se combinan en uno solo.</p>",
+        unsafe_allow_html=True
+    )
+
+    uploaded_ext = st.file_uploader(
+        "Archivos Excel",
+        type=["xlsx", "xls"],
+        accept_multiple_files=True,
+        key="up_extractor",
+        label_visibility="collapsed"
+    )
+
+    if uploaded_ext:
+        frames, errores = [], []
+
+        for f in uploaded_ext:
+            try:
+                df_raw = pd.read_excel(f)
+                cols_presentes = [c for c in EXTRACT_COLS if c in df_raw.columns]
+                cols_faltantes = [c for c in EXTRACT_COLS if c not in df_raw.columns]
+                if cols_faltantes:
+                    errores.append(f"**{f.name}** — columnas no encontradas: {', '.join(cols_faltantes)}")
+                if cols_presentes:
+                    frames.append(df_raw[cols_presentes].copy())
+            except Exception as e:
+                errores.append(f"**{f.name}** — error al leer: {e}")
+
+        for err in errores:
+            st.warning(err)
+
+        if frames:
+            df_result = pd.concat(frames, ignore_index=True)
+
+            ex1, ex2, ex3 = st.columns(3)
+            ex1.markdown(metric_card("ARCHIVOS", len(uploaded_ext), "#cdd6f4"), unsafe_allow_html=True)
+            ex2.markdown(metric_card("FILAS TOTALES", len(df_result), "#89b4fa"), unsafe_allow_html=True)
+            ex3.markdown(metric_card("COLUMNAS", len(df_result.columns), "#a6e3a1"), unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
+            st.dataframe(df_result.head(50), use_container_width=True, hide_index=True)
+            if len(df_result) > 50:
+                st.caption(f"Mostrando 50 de {len(df_result)} filas.")
+
+            ts_ext = datetime.now().strftime("%d%m_%H%M")
+            st.download_button(
+                label=f"📥 Descargar extracción ({len(df_result)} filas)",
+                data=df_to_csv_bytes(df_result),
+                file_name=f"extraccion_{ts_ext}.csv",
+                mime="text/csv",
+                use_container_width=False,
+                key="dl_extractor"
+            )
+        elif not errores:
+            st.info("Ningún archivo contenía las columnas requeridas.")
