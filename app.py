@@ -569,13 +569,22 @@ with tab_extractor:
                 st.caption(f"Mostrando 50 de {len(df_result)} filas.")
 
             ts_ext = datetime.now().strftime("%d%m_%H%M")
-            st.download_button(
-                label=f"📥 Descargar extracción ({len(df_result)} filas)",
+            dl_csv_col, dl_xlsx_col = st.columns(2)
+            dl_csv_col.download_button(
+                label=f"📥 Descargar CSV ({len(df_result)} filas)",
                 data=df_to_csv_bytes(df_result),
                 file_name=f"extraccion_{ts_ext}.csv",
                 mime="text/csv",
-                use_container_width=False,
-                key="dl_extractor"
+                use_container_width=True,
+                key="dl_extractor_csv"
+            )
+            dl_xlsx_col.download_button(
+                label=f"📥 Descargar Excel ({len(df_result)} filas)",
+                data=df_to_excel_bytes(df_result),
+                file_name=f"extraccion_{ts_ext}.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                use_container_width=True,
+                key="dl_extractor_xlsx"
             )
         elif not errores:
             st.info("Ningún archivo contenía las columnas requeridas.")
