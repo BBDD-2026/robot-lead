@@ -515,14 +515,15 @@ with tab_acum:
 # ══════════════════════════════════════════════════════════════
 # TAB 4 — EXTRACTOR
 # ══════════════════════════════════════════════════════════════
-EXTRACT_COLS = ["idinterno_gestor", "tipo_lead", "contact_info"]
+EXTRACT_COLS = ["idinterno_gestor", "tipo_lead", "contact_info", "Ruta", "Localidad", "Provincia", "Gen_Insert", "customer_firstname"]
 
 with tab_extractor:
     st.markdown("<h4 style='color:#cdd6f4'>Extractor de columnas</h4>", unsafe_allow_html=True)
     st.markdown(
         "<p style='color:#6c7086;font-size:13px'>Sube uno o varios archivos Excel. "
-        "Se extraen las columnas <code>idinterno_gestor</code>, <code>tipo_lead</code> y "
-        "<code>contact_info</code> de todos los archivos y se combinan en uno solo.</p>",
+        "Se extraen las columnas <code>idinterno_gestor</code>, <code>tipo_lead</code>, "
+        "<code>contact_info</code>, <code>Ruta</code>, <code>Localidad</code>, <code>Provincia</code>, "
+        "<code>Gen_Insert</code> y <code>customer_firstname</code> de todos los archivos y se combinan en uno solo.</p>",
         unsafe_allow_html=True
     )
 
