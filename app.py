@@ -536,7 +536,7 @@ with tab_extractor:
     )
 
     if uploaded_ext:
-        frames, errores = [], []
+        frames, errores, proc_metrics = [], [], []
 
         for f in uploaded_ext:
             try:
@@ -551,7 +551,17 @@ with tab_extractor:
                     if subir_col is not None:
                         df_si = df_raw[df_raw[subir_col].astype(str).str.strip().str.lower() == "si"]
                     else:
-                        df_si = df_raw  # sin columna Subir: extraer todas las filas
+                        # Archivo crudo: procesar primero y filtrar a "si"
+                        res = procesar(df_raw)
+                        proc_metrics.append({
+                            "Archivo": f.name,
+                            "si": res["si"],
+                            "dupl": res["dupl"],
+                            "Invalid": res["invalid"],
+                            "Sin Datos": res["sin_datos"],
+                        })
+                        df_si = res["df"][res["df"]["Subir"] == "si"].copy()
+
                     if df_si.empty:
                         continue
                     col_lower_si = {c.lower(): c for c in df_si.columns}
@@ -565,16 +575,29 @@ with tab_extractor:
             except Exception as e:
                 errores.append(f"**{f.name}** — error al leer: {e}")
 
+        # Mostrar resultado del procesamiento si hubo archivos crudos
+        if proc_metrics:
+            st.markdown("<div class='section-title'>Resultado del procesamiento</div>", unsafe_allow_html=True)
+            for pm in proc_metrics:
+                st.markdown(f"<p style='color:#6c7086;font-size:12px;margin-bottom:4px'>{pm['Archivo']}</p>", unsafe_allow_html=True)
+                pm1, pm2, pm3, pm4 = st.columns(4)
+                pm1.markdown(metric_card("si",        pm["si"],        "#a6e3a1"), unsafe_allow_html=True)
+                pm2.markdown(metric_card("dupl",      pm["dupl"],      "#f9e2af"), unsafe_allow_html=True)
+                pm3.markdown(metric_card("Invalid",   pm["Invalid"],   "#f38ba8"), unsafe_allow_html=True)
+                pm4.markdown(metric_card("Sin Datos", pm["Sin Datos"], "#f38ba8" if pm["Sin Datos"] else "#a6e3a1"), unsafe_allow_html=True)
+            st.markdown("<br>", unsafe_allow_html=True)
+
         for err in errores:
             st.warning(err)
 
         if frames:
             df_result = pd.concat(frames, ignore_index=True)
 
+            st.markdown("<div class='section-title'>Columnas extraidas</div>", unsafe_allow_html=True)
             ex1, ex2, ex3 = st.columns(3)
-            ex1.markdown(metric_card("ARCHIVOS", len(uploaded_ext), "#cdd6f4"), unsafe_allow_html=True)
-            ex2.markdown(metric_card("FILAS TOTALES", len(df_result), "#89b4fa"), unsafe_allow_html=True)
-            ex3.markdown(metric_card("COLUMNAS", len(df_result.columns), "#a6e3a1"), unsafe_allow_html=True)
+            ex1.markdown(metric_card("ARCHIVOS",     len(uploaded_ext),    "#cdd6f4"), unsafe_allow_html=True)
+            ex2.markdown(metric_card("FILAS TOTALES", len(df_result),      "#89b4fa"), unsafe_allow_html=True)
+            ex3.markdown(metric_card("COLUMNAS",     len(df_result.columns), "#a6e3a1"), unsafe_allow_html=True)
             st.markdown("<br>", unsafe_allow_html=True)
 
             st.dataframe(df_result.head(50), use_container_width=True, hide_index=True)
