@@ -548,9 +548,10 @@ with tab_extractor:
                 for sheet_name, df_raw in sheets.items():
                     col_lower = {c.lower(): c for c in df_raw.columns}
                     subir_col = col_lower.get("subir")
-                    if subir_col is None:
-                        continue
-                    df_si = df_raw[df_raw[subir_col].astype(str).str.strip().str.lower() == "si"]
+                    if subir_col is not None:
+                        df_si = df_raw[df_raw[subir_col].astype(str).str.strip().str.lower() == "si"]
+                    else:
+                        df_si = df_raw  # sin columna Subir: extraer todas las filas
                     if df_si.empty:
                         continue
                     col_lower_si = {c.lower(): c for c in df_si.columns}
