@@ -546,13 +546,16 @@ with tab_extractor:
                     sheets = pd.read_excel(f, sheet_name=None)
 
                 for sheet_name, df_raw in sheets.items():
-                    if "Subir" not in df_raw.columns:
+                    col_lower = {c.lower(): c for c in df_raw.columns}
+                    subir_col = col_lower.get("subir")
+                    if subir_col is None:
                         continue
-                    df_si = df_raw[df_raw["Subir"].astype(str).str.strip().str.lower() == "si"]
+                    df_si = df_raw[df_raw[subir_col].astype(str).str.strip().str.lower() == "si"]
                     if df_si.empty:
                         continue
-                    cols_presentes = [c for c in EXTRACT_COLS if c in df_si.columns]
-                    cols_faltantes = [c for c in EXTRACT_COLS if c not in df_si.columns]
+                    col_lower_si = {c.lower(): c for c in df_si.columns}
+                    cols_presentes = [col_lower_si[c.lower()] for c in EXTRACT_COLS if c.lower() in col_lower_si]
+                    cols_faltantes = [c for c in EXTRACT_COLS if c.lower() not in col_lower_si]
                     if cols_faltantes:
                         label = f"{f.name} [{sheet_name}]" if sheet_name != "CSV" else f.name
                         errores.append(f"**{label}** — columnas no encontradas: {', '.join(cols_faltantes)}")
