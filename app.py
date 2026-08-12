@@ -3,9 +3,12 @@ import pandas as pd
 import re
 import io
 import os
+import random
 import hashlib
 import sqlite3
 from datetime import datetime
+
+from reference_data import REGION_MAP, AGENT_IDS
 
 # ── Rutas de persistencia ─────────────────────────────────────
 DATA_DIR = os.path.join(os.path.dirname(__file__), "data")
@@ -190,6 +193,77 @@ def decode_db_id(value) -> tuple:
     return (nombre, f"{mes} {year}")
 
 
+# ── Estructura de salida CRM (52 columnas) ──────────────────────
+TARGET_COLS = [
+    "RECORD_ID", "CONTACT_INFO", "CONTACT_INFO_TYPE", "RECORD_TYPE", "RECORD_STATUS",
+    "CALL_RESULT", "ATTEMPT", "DIAL_SCHED_TIME", "CALL_TIME", "DAILY_FROM", "DAILY_TILL",
+    "TZ_DBID", "CAMPAIGN_ID", "AGENT_ID", "CHAIN_ID", "CHAIN_N", "GROUP_ID", "APP_ID",
+    "TREATMENTS", "MEDIA_REF", "EMAIL_SUBJECT", "EMAIL_TEMPLATE_ID", "SWITCH_ID",
+    "CORTEBASE", "DISPOSITIONCODE", "CLIENTE_NOMBRE", "CLIENTE_APELLIDO", "REGION",
+    "UBICACION", "SITIOS", "EMAIL", "CAMPANIA", "FECHA_INSERCION",
+    "CUST_DATA_1", "CUST_DATA_2", "CUST_DATA_3", "CUST_DATA_4", "CUST_DATA_5",
+    "CUST_DATA_6", "CUST_DATA_7", "CUST_DATA_8", "CUST_DATA_9", "CUST_DATA_10",
+    "CUST_DATA_11", "CUST_DATA_12", "CUST_DATA_13", "CUST_DATA_14", "CUST_DATA_15",
+    "CUST_DATA_ED_1", "CUST_DATA_ED_2", "CUST_DATA_ED_3", "CUST_DATA_ED_4",
+]
+
+# Columnas que se copian tal cual desde el archivo fuente (case-insensitive)
+SIMPLE_MAP = {
+    "CONTACT_INFO": "contact_info", "CONTACT_INFO_TYPE": "contact_info_type",
+    "RECORD_TYPE": "record_type", "RECORD_STATUS": "record_status",
+    "CALL_RESULT": "call_result", "ATTEMPT": "attempt",
+    "DIAL_SCHED_TIME": "dial_sched_time", "CALL_TIME": "call_time",
+    "DAILY_FROM": "daily_from", "DAILY_TILL": "daily_till", "TZ_DBID": "tz_dbid",
+    "CAMPAIGN_ID": "campaign_id", "CHAIN_N": "chain_n", "GROUP_ID": "group_id",
+    "APP_ID": "app_id", "TREATMENTS": "treatments", "MEDIA_REF": "media_ref",
+    "EMAIL_SUBJECT": "email_subject", "EMAIL_TEMPLATE_ID": "email_template_id",
+    "SWITCH_ID": "switch_id", "CORTEBASE": "DB_ID", "DISPOSITIONCODE": "DispositionCode",
+    "CLIENTE_NOMBRE": "customer_firstname", "CLIENTE_APELLIDO": "customer_lastname",
+    "FECHA_INSERCION": "Gen_Insert", "CUST_DATA_13": "idinterno_gestor",
+    "CUST_DATA_14": "Localidad", "CUST_DATA_15": "Ruta",
+}
+
+# Columnas con valor literal fijo
+CONSTANT_MAP = {"CAMPANIA": "PortOut", "CUST_DATA_12": "MOVISTAR"}
+
+# Columnas sin dato de origen: siempre vacías
+EMPTY_COLS = (
+    ["UBICACION", "SITIOS", "EMAIL"]
+    + [f"CUST_DATA_{i}" for i in range(1, 12)]
+    + [f"CUST_DATA_ED_{i}" for i in range(1, 5)]
+)
+
+
+def build_target_df(df_si: pd.DataFrame) -> pd.DataFrame:
+    """Arma la matriz de 52 columnas (formato CRM) a partir de las filas 'si'."""
+    n = len(df_si)
+    col_lower = {c.lower(): c for c in df_si.columns}
+
+    def get(source_col: str) -> pd.Series:
+        real = col_lower.get(source_col.lower())
+        return df_si[real].reset_index(drop=True) if real else pd.Series([None] * n)
+
+    out = pd.DataFrame(index=range(n))
+    for target, source in SIMPLE_MAP.items():
+        out[target] = get(source)
+    for target, const in CONSTANT_MAP.items():
+        out[target] = const
+    for target in EMPTY_COLS:
+        out[target] = ""
+
+    out["RECORD_ID"] = range(1, n + 1)
+    out["CHAIN_ID"] = out["RECORD_ID"]
+
+    ruta_key = get("Ruta").astype(str).str.strip().str.upper()
+    out["REGION"] = ruta_key.map(REGION_MAP).fillna("")
+
+    out["AGENT_ID"] = (
+        [random.choice(AGENT_IDS) for _ in range(n)] if AGENT_IDS else ""
+    )
+
+    return out[TARGET_COLS]
+
+
 def procesar(df: pd.DataFrame) -> dict:
     df = df.copy()
     if "Ruta" in df.columns and "Province" in df.columns:
@@ -241,35 +315,16 @@ def df_to_csv_bytes(df: pd.DataFrame) -> bytes:
 
 def build_csv_si(df: pd.DataFrame) -> pd.DataFrame:
     df_si = df[df["Subir"] == "si"].copy().reset_index(drop=True)
-    df_si["record_id"] = range(1, len(df_si) + 1)
-    df_si["chain_id"]  = df_si["record_id"]
-    if "record_id" in df_si.columns:
-        start = df_si.columns.get_loc("record_id")
-        df_si = df_si.iloc[:, start:]
-    if "DB_ID" in df_si.columns:
-        end = df_si.columns.get_loc("DB_ID") + 1
-        df_si = df_si.iloc[:, :end]
-    return df_si
+    return build_target_df(df_si)
 
 
 def build_download_acum(df: pd.DataFrame) -> pd.DataFrame:
-    """Filtra filas 'si', regenera record_id correlativo y extrae columnas record_id→DB_ID."""
-    meta = {"id", "_fecha_proceso", "_tipo", "_periodo", "_mes", "_anio", "_archivo_hash"}
+    """Filtra filas 'si' y arma la matriz de 52 columnas (formato CRM)."""
     if "Subir" in df.columns:
         df = df[df["Subir"] == "si"].copy().reset_index(drop=True)
     else:
         df = df.copy().reset_index(drop=True)
-    data_cols = [c for c in df.columns if c not in meta]
-    out = df[data_cols]
-    if "record_id" in out.columns and "DB_ID" in out.columns:
-        out = out.copy()
-        out["record_id"] = range(1, len(out) + 1)
-        if "chain_id" in out.columns:
-            out["chain_id"] = out["record_id"]
-        start = out.columns.get_loc("record_id")
-        end   = out.columns.get_loc("DB_ID") + 1
-        out   = out.iloc[:, start:end]
-    return out
+    return build_target_df(df)
 
 
 def metric_card(label, value, color="#cdd6f4"):
