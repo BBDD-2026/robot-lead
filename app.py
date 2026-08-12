@@ -219,8 +219,7 @@ SIMPLE_MAP = {
     "EMAIL_SUBJECT": "email_subject", "EMAIL_TEMPLATE_ID": "email_template_id",
     "SWITCH_ID": "switch_id", "CORTEBASE": "DB_ID", "DISPOSITIONCODE": "DispositionCode",
     "CLIENTE_NOMBRE": "customer_firstname", "CLIENTE_APELLIDO": "customer_lastname",
-    "FECHA_INSERCION": "Gen_Insert", "CUST_DATA_13": "idinterno_gestor",
-    "CUST_DATA_14": "Localidad", "CUST_DATA_15": "Ruta",
+    "CUST_DATA_13": "idinterno_gestor", "CUST_DATA_14": "Localidad", "CUST_DATA_15": "Ruta",
 }
 
 # Columnas con valor literal fijo
@@ -253,6 +252,7 @@ def build_target_df(df_si: pd.DataFrame) -> pd.DataFrame:
 
     out["RECORD_ID"] = range(1, n + 1)
     out["CHAIN_ID"] = out["RECORD_ID"]
+    out["FECHA_INSERCION"] = pd.Timestamp(datetime.now().date())
 
     ruta_key = get("Ruta").astype(str).str.strip().str.upper()
     out["REGION"] = ruta_key.map(REGION_MAP).fillna("")
