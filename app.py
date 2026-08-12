@@ -472,6 +472,26 @@ with tab_proc:
                     unsafe_allow_html=True)
     _render_panel(col_baf, "Baf", "up_baf", "#a6e3a1")
 
+    st.markdown("---")
+    if "res_Porta" in st.session_state and "res_Baf" in st.session_state:
+        df_uni_porta = build_csv_si(st.session_state["res_Porta"]["df"])
+        df_uni_baf   = build_csv_si(st.session_state["res_Baf"]["df"])
+        df_unificado = pd.concat([df_uni_porta, df_uni_baf], ignore_index=True)
+        df_unificado["RECORD_ID"] = range(1, len(df_unificado) + 1)
+        df_unificado["CHAIN_ID"]  = df_unificado["RECORD_ID"]
+
+        ts_uni = datetime.now().strftime("%d%m_%H%M")
+        st.download_button(
+            label=f"🔗  Unificar Porta + Baf ({len(df_unificado)} filas 'si')",
+            data=df_to_csv_bytes(df_unificado),
+            file_name=f"Lote_Unificado_{ts_uni}.csv",
+            mime="text/csv",
+            use_container_width=True,
+            key="dl_unificado"
+        )
+    else:
+        st.info("Procesá Porta y Baf para habilitar la unificación en un solo archivo.")
+
 
 # ══════════════════════════════════════════════════════════════
 # TAB 2 — MUESTREO DEL DIA
