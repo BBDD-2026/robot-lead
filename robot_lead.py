@@ -6,7 +6,7 @@ import re
 import random
 import subprocess
 from datetime import datetime
-from reference_data import REGION_MAP, AGENT_IDS
+from reference_data import LOCALIDAD_REGION_MAP, AGENT_IDS
 import matplotlib
 matplotlib.use("TkAgg")
 import matplotlib.pyplot as plt
@@ -127,8 +127,8 @@ def build_target_df(df_si: pd.DataFrame) -> pd.DataFrame:
     out["CHAIN_ID"] = out["RECORD_ID"]
     out["FECHA_INSERCION"] = pd.Timestamp(datetime.now().date())
 
-    ruta_key = get("Ruta").astype(str).str.strip().str.upper()
-    out["REGION"] = ruta_key.map(REGION_MAP).fillna("")
+    localidad_key = get("Localidad").astype(str).str.strip().str.upper()
+    out["REGION"] = localidad_key.map(LOCALIDAD_REGION_MAP).fillna("")
 
     out["AGENT_ID"] = (
         [random.choice(AGENT_IDS) for _ in range(n)] if AGENT_IDS else ""
